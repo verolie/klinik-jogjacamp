@@ -14,16 +14,22 @@ return new class extends Migration
         Schema::create('patients', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
+            $table->timestamp('updated_at')->nullable();
+            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('diagnoses', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
+            $table->timestamp('updated_at')->nullable();
+            $table->timestamp('created_at')->nullable();
         });
 
         Schema::create('services', function (Blueprint $table) {
             $table->id();
             $table->string('name')->unique();
+            $table->timestamp('updated_at')->nullable();
+            $table->timestamp('created_at')->nullable();
         });
     }
 

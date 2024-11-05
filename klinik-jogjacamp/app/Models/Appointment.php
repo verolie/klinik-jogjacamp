@@ -36,4 +36,5 @@ class Appointment extends Model
     {
         return $this->hasMany(CheckupProgress::class);
     }
+
 }

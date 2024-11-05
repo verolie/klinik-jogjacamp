@@ -9,6 +9,8 @@ use App\Models\Patient;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Jobs\AppointmentQueue;
+use Illuminate\Support\Facades\Log;
 
 class AppointmentController extends Controller
 {
@@ -50,6 +52,8 @@ class AppointmentController extends Controller
                 $this->createCheckupProgress($appointment->id, "icu");
             }
 
+            AppointmentQueue::dispatch($appointment->id);
+
             return response()->json([
                 'message' => "Appointment created successfully.",
                 'appointment_id' => $appointment->id,
@@ -79,37 +83,48 @@ class AppointmentController extends Controller
     public function getAppointment($id)
     {
         try {
-            $appointment = Appointment::with(['patient', 'diagnose', 'checkupProgress.service'])
-                ->findOrFail($id);
+            $appointment = Appointment::join('patients', 'patients.id', '=', 'appointments.patient_id')
+                ->join('diagnoses', 'diagnoses.id', '=', 'appointments.diagnose_id')
+                ->where('appointments.id', '=', $id)
+                ->select('appointments.id', 'patients.id as patient_id', 'patients.name as patient_name', 'diagnoses.id as diagnose_id', 'diagnoses.name as diagnose_name')
+                ->first();
+
+            if (!$appointment) {
+                return response()->json(['error' => 'Appointment not found.'], 404);
+            }
+
+            $checkupProgress = CheckupProgress::join('services', 'services.id', '=', 'checkup_progress.service_id')
+                ->where('checkup_progress.appointment_id', '=', $appointment->id)
+                ->select('checkup_progress.id', 'services.id as service_id', 'services.name as service_name', 'checkup_progress.status')
+                ->get();
 
             $responseData = [
                 'id' => $appointment->id,
                 'patient' => [
-                    'id' => $appointment->patient->id,
-                    'name' => $appointment->patient->name,
+                    'id' => $appointment->patient_id,
+                    'name' => $appointment->patient_name,
                 ],
                 'diagnose' => [
-                    'id' => $appointment->diagnose->id,
-                    'name' => $appointment->diagnose->name,
+                    'id' => $appointment->diagnose_id,
+                    'name' => $appointment->diagnose_name,
                 ],
-                'checkup' => $appointment->checkupProgress->map(function ($checkup) {
+                'checkup' => $checkupProgress->map(function ($checkup) {
                     return [
                         'id' => $checkup->id,
                         'service' => [
-                            'id' => $checkup->service->id,
-                            'name' => $checkup->service->name,
+                            'id' => $checkup->service_id,
+                            'name' => $checkup->service_name,
                         ],
                         'status' => $checkup->status,
                     ];
-                })
+                }),
             ];
 
             return response()->json($responseData, 200);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Appointment not found or failed to retrieve.'], 404);
+            return response()->json(['error' => 'Failed to retrieve appointment data.'], 500);
         }
     }
-
 
     public function patchAppointment(Request $request, $id)
     {
@@ -128,9 +143,19 @@ class AppointmentController extends Controller
         }
 
         try {
-            $appointment = Appointment::with('checkupProgress')->findOrFail($id);
+            $appointment = Appointment::join('patients', 'patients.id', '=', 'appointments.patient_id')
+                ->join('diagnoses', 'diagnoses.id', '=', 'appointments.diagnose_id')
+                ->where('appointments.id', $id)
+                ->select('appointments.*', 'patients.id as patient_id', 'patients.name as patient_name', 'diagnoses.id as diagnose_id', 'diagnoses.name as diagnose_name')
+                ->first();
 
-            $allCompleted = $appointment->checkupProgress->every(function ($checkup) {
+            if (!$appointment) {
+                return response()->json(['error' => 'Cannot find appointment with the provided ID.'], 404);
+            }
+
+            $checkupProgress = CheckupProgress::where('appointment_id', $id)->get();
+
+            $allCompleted = $checkupProgress->every(function ($checkup) {
                 return $checkup->status === 1;
             });
 
@@ -138,43 +163,46 @@ class AppointmentController extends Controller
                 return response()->json(['error' => 'Cannot update appointment until all checkup processes are completed.'], 400);
             }
 
-            $appointment->update([
-                'patient_id' => $request->input('patient_id'),
-                'diagnose_id' => $request->input('diagnose_id'),
-            ]);
+            Appointment::where('id', $id)->update(['status' => 1]);
 
-            foreach ($request->input('status') as $statusUpdate) {
-                $checkupProgress = CheckupProgress::findOrFail($statusUpdate['id']);
-                $checkupProgress->update([
-                    'status' => $statusUpdate['status'],
-                ]);
-            }
+            $updatedAppointment = Appointment::join('patients', 'patients.id', '=', 'appointments.patient_id')
+            ->join('diagnoses', 'diagnoses.id', '=', 'appointments.diagnose_id')
+            ->where('appointments.id', $id)
+            ->select(
+                'appointments.*',
+                'patients.id as patient_id',
+                'patients.name as patient_name',
+                'diagnoses.id as diagnose_id',
+                'diagnoses.name as diagnose_name'
+            )
+                ->first();
 
-            // Fetch updated appointment data with related models for the response
-            $updatedAppointment = Appointment::with([
-                'patient:id,name',
-                'diagnose:id,name',
-                'checkupProgress' => function ($query) {
-                    $query->with('service:id,name')->select('id', 'appointment_id', 'service_id', 'status');
-                }
-            ])->findOrFail($id);
+            $updatedCheckupProgress = CheckupProgress::join(
+                'services',
+                'services.id',
+                '=',
+                'checkup_progress.service_id'
+            )
+                ->where('checkup_progress.appointment_id', $updatedAppointment->id)
+                ->select('checkup_progress.id', 'services.id as service_id', 'services.name as service_name', 'checkup_progress.status')
+                ->get();
 
             return response()->json([
                 'id' => $updatedAppointment->id,
                 'patient' => [
-                    'id' => $updatedAppointment->patient->id,
-                    'name' => $updatedAppointment->patient->name,
+                    'id' => $updatedAppointment->patient_id,
+                    'name' => $updatedAppointment->patient_name,
                 ],
                 'diagnose' => [
-                    'id' => $updatedAppointment->diagnose->id,
-                    'name' => $updatedAppointment->diagnose->name,
+                    'id' => $updatedAppointment->diagnose_id,
+                    'name' => $updatedAppointment->diagnose_name,
                 ],
-                'checkup' => $updatedAppointment->checkupProgress->map(function ($checkup) {
+                'checkup' => $updatedCheckupProgress->map(function ($checkup) {
                     return [
                         'id' => $checkup->id,
                         'service' => [
-                            'id' => $checkup->service->id,
-                            'name' => $checkup->service->name,
+                            'id' => $checkup->service_id,
+                            'name' => $checkup->service_name,
                         ],
                         'status' => $checkup->status,
                     ];
@@ -184,4 +212,5 @@ class AppointmentController extends Controller
             return response()->json(['error' => 'Failed to update appointment.'], 500);
         }
     }
+
 }

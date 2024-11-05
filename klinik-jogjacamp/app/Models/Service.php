@@ -11,11 +11,8 @@ class Service extends Model
 
     protected $table = 'services';
 
-    protected $fillable = ['name']; // Assuming 'name' is a fillable attribute for Service
+    protected $fillable = ['name'];
 
-    /**
-     * Relationship with the CheckupProgress model.
-     */
     public function checkupProgress()
     {
         return $this->hasMany(CheckupProgress::class);

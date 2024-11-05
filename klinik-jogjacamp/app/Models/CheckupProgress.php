@@ -9,4 +9,6 @@ class CheckupProgress extends Model
 {
     use HasFactory;
     protected $table = 'checkup_progress';
+
+    protected $fillable = ['appointment_id', 'service_id'];
 }
