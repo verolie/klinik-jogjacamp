@@ -66,3 +66,23 @@ Endpoint ini digunakan untuk mendaftarkan diagnosa level sakit pasien.
 pada endpoint ini akan melakukan validasi sebelum memproses lebih lanjut yaitu:
 - jika tidak ada request nama
 - dan nama sudah exist di database
+
+### 4. Create Appointment
+```
+POST http://127.0.0.1:8000/api/appointment
+```
+Endpoint ini digunakan untuk mendaftarkan diagnosa level sakit pasien.
+```
+{
+    "patient_id": 1,
+    "diagnose_id": 3
+}
+```
+pada endpoint ini akan melakukan validasi sebelum memproses lebih lanjut yaitu:
+- jika tidak ada request patient_id dan diagnose_id
+- cek existing atau tidaknya di database
+
+Terdapat beberapa kondisi appointment berdasarkan level sakit pasien yang dirawat, berikut ini merupakan beberapa point kondisi:
+- kondisi jika sakit ringan service yang diberikan adalah obat
+- kondisi jika sakit berat service yang diberikan adalah obat dan rawat inap
+- kondisi jika sakit berat service yang diberikan adalah obat, rawat inap, dan icu
