@@ -7,9 +7,9 @@ use App\Http\Controllers\DiagnoseController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\AppointmentController;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+// Route::get('/user', function (Request $request) {
+//     return $request->user();
+// })->middleware('auth:sanctum');
 
 
 Route::post('/patient', [PatientController::class, 'createPatient']);

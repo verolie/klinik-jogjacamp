@@ -115,7 +115,7 @@ class AppointmentController extends Controller
                             'id' => $checkup->service_id,
                             'name' => $checkup->service_name,
                         ],
-                        'status' => $checkup->status,
+                        'status' => $checkup->status === 1 ? 'Completed' : 'In Progress',
                     ];
                 }),
             ];
@@ -131,7 +131,7 @@ class AppointmentController extends Controller
         $validator = Validator::make($request->all(), [
             'patient_id' => 'required|exists:patients,id',
             'diagnose_id' => 'required|exists:diagnoses,id',
-            'status' => 'required',
+            'status' => 'required|in:0,1',
         ], [
             'patient_id.required' => 'Patient ID tidak boleh kosong',
             'diagnose_id.required' => 'Diagnose ID tidak boleh kosong',
@@ -146,11 +146,13 @@ class AppointmentController extends Controller
             $appointment = Appointment::join('patients', 'patients.id', '=', 'appointments.patient_id')
                 ->join('diagnoses', 'diagnoses.id', '=', 'appointments.diagnose_id')
                 ->where('appointments.id', $id)
+                ->where('appointments.diagnose_id', $request->diagnose_id)
+                ->where('appointments.patient_id', $request->patient_id)
                 ->select('appointments.*', 'patients.id as patient_id', 'patients.name as patient_name', 'diagnoses.id as diagnose_id', 'diagnoses.name as diagnose_name')
                 ->first();
 
             if (!$appointment) {
-                return response()->json(['error' => 'Cannot find appointment with the provided ID.'], 404);
+                return response()->json(['error' => 'Cannot find appointment data.'], 404);
             }
 
             $checkupProgress = CheckupProgress::where('appointment_id', $id)->get();
@@ -163,7 +165,7 @@ class AppointmentController extends Controller
                 return response()->json(['error' => 'Cannot update appointment until all checkup processes are completed.'], 400);
             }
 
-            Appointment::where('id', $id)->update(['status' => 1]);
+            Appointment::where('id', $id)->update(['status' => $request->status]);
 
             $updatedAppointment = Appointment::join('patients', 'patients.id', '=', 'appointments.patient_id')
             ->join('diagnoses', 'diagnoses.id', '=', 'appointments.diagnose_id')
@@ -186,6 +188,7 @@ class AppointmentController extends Controller
                 ->where('checkup_progress.appointment_id', $updatedAppointment->id)
                 ->select('checkup_progress.id', 'services.id as service_id', 'services.name as service_name', 'checkup_progress.status')
                 ->get();
+                
 
             return response()->json([
                 'id' => $updatedAppointment->id,
@@ -204,7 +207,7 @@ class AppointmentController extends Controller
                             'id' => $checkup->service_id,
                             'name' => $checkup->service_name,
                         ],
-                        'status' => $checkup->status,
+                        'status' => $checkup->status === 1 ? 'Completed' : 'In Progress',
                     ];
                 }),
             ], 200);
