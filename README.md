@@ -33,7 +33,7 @@ Endpoint ini digunakan untuk mendaftarkan pasien baru.
 berikut ini merupakan contoh request body:
 ```
 {
-    "name": "gema"
+    "name": "budi"
 }
 ```
 pada endpoint ini akan melakukan validasi sebelum memproses lebih lanjut yaitu:
